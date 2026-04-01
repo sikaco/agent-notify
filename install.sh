@@ -10,7 +10,7 @@ RAW_BASE="https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$REPO_REF"
 INSTALL_ROOT="$HOME/.agent-notify"
 BIN_DIR="$INSTALL_ROOT/bin"
 LOG_DIR="$INSTALL_ROOT/logs"
-WATCHER_NAME="agent-notify-watch.py"
+WATCHER_NAME="agent-notify-watch.mjs"
 WATCHER_DEST="$BIN_DIR/$WATCHER_NAME"
 
 CLAUDE_DIR="$HOME/.claude"
@@ -33,9 +33,9 @@ require_macos() {
   fi
 }
 
-require_python() {
-  if ! command -v python3 >/dev/null 2>&1; then
-    echo "python3 is required."
+require_node() {
+  if ! command -v node >/dev/null 2>&1; then
+    echo "node is required."
     exit 1
   fi
 }
@@ -78,14 +78,8 @@ download_or_copy() {
 
 write_claude_hook() {
   mkdir -p "$CLAUDE_HOOKS_DIR"
-
-  python3 - "$CLAUDE_HOOK_PATH" <<'PY'
-from pathlib import Path
-import stat
-import sys
-
-hook_path = Path(sys.argv[1])
-script = """#!/bin/bash
+  cat > "$CLAUDE_HOOK_PATH" <<'EOF'
+#!/bin/bash
 set -euo pipefail
 
 PROJECT_NAME=$(basename "${PWD:-$HOME}")
@@ -103,23 +97,9 @@ if command -v terminal-notifier >/dev/null 2>&1; then
   exit 0
 fi
 
-python3 - "$TITLE" "$SUBTITLE" "$MESSAGE" <<'INNER'
-import json
-import subprocess
-import sys
-
-title, subtitle, message = sys.argv[1:4]
-script = (
-    f"display notification {json.dumps(message)} "
-    f"with title {json.dumps(title)} "
-    f"subtitle {json.dumps(subtitle)}"
-)
-subprocess.run(["osascript", "-e", script], check=False)
-INNER
-"""
-hook_path.write_text(script)
-hook_path.chmod(hook_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-PY
+/usr/bin/osascript -e "display notification \"$MESSAGE\" with title \"$TITLE\" subtitle \"$SUBTITLE\"" >/dev/null 2>&1 || true
+EOF
+  chmod +x "$CLAUDE_HOOK_PATH"
 }
 
 backup_claude_settings() {
@@ -133,75 +113,68 @@ backup_claude_settings() {
 }
 
 merge_claude_hook_config() {
-  python3 <<'PY'
-import json
-from pathlib import Path
+  node <<'NODE'
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
-settings_path = Path.home() / ".claude" / "settings.json"
-hook_path = str(Path.home() / ".claude" / "hooks" / "agent-notify.sh")
+const settingsPath = path.join(os.homedir(), ".claude", "settings.json");
+const hookPath = path.join(os.homedir(), ".claude", "hooks", "agent-notify.sh");
 
-if settings_path.exists():
-    try:
-        config = json.loads(settings_path.read_text())
-    except Exception:
-        config = {}
-else:
-    config = {}
+let config = {};
+if (fs.existsSync(settingsPath)) {
+  try {
+    config = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+  } catch {
+    config = {};
+  }
+}
 
-hooks = config.setdefault("hooks", {})
-stop_entries = hooks.setdefault("Stop", [])
-if not isinstance(stop_entries, list):
-    stop_entries = []
-    hooks["Stop"] = stop_entries
+config.hooks ??= {};
+if (!Array.isArray(config.hooks.Stop)) {
+  config.hooks.Stop = [];
+}
 
-for entry in stop_entries:
-    nested = entry.get("hooks", [])
-    for hook in nested:
-        if hook.get("type") == "command" and hook.get("command") == hook_path:
-            settings_path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n")
-            raise SystemExit(0)
+const exists = config.hooks.Stop.some((entry) =>
+  Array.isArray(entry.hooks) &&
+  entry.hooks.some((hook) => hook.type === "command" && hook.command === hookPath),
+);
 
-stop_entries.append(
-    {
-        "hooks": [
-            {
-                "type": "command",
-                "command": hook_path,
-            }
-        ]
-    }
-)
+if (!exists) {
+  config.hooks.Stop.push({
+    hooks: [
+      {
+        type: "command",
+        command: hookPath,
+      },
+    ],
+  });
+}
 
-settings_path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n")
-PY
+fs.writeFileSync(settingsPath, `${JSON.stringify(config, null, 2)}\n`);
+NODE
 }
 
 install_watcher() {
   mkdir -p "$BIN_DIR" "$LOG_DIR" "$HOME/Library/LaunchAgents"
+  rm -f "$BIN_DIR/agent-notify-watch.py"
+  rm -rf "$BIN_DIR/__pycache__"
   download_or_copy "$WATCHER_NAME" "$WATCHER_DEST"
   chmod +x "$WATCHER_DEST"
 }
 
 write_launch_agent() {
-  python3 - "$LAUNCH_AGENT_PATH" "$LAUNCH_AGENT_ID" "$WATCHER_DEST" "$LOG_DIR" <<'PY'
-from pathlib import Path
-import sys
-
-plist_path = Path(sys.argv[1])
-label = sys.argv[2]
-watcher_path = sys.argv[3]
-log_dir = sys.argv[4]
-
-content = f"""<?xml version="1.0" encoding="UTF-8"?>
+  cat > "$LAUNCH_AGENT_PATH" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
   <dict>
     <key>Label</key>
-    <string>{label}</string>
+    <string>$LAUNCH_AGENT_ID</string>
     <key>ProgramArguments</key>
     <array>
-      <string>/usr/bin/python3</string>
-      <string>{watcher_path}</string>
+      <string>$(command -v node)</string>
+      <string>$WATCHER_DEST</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -213,16 +186,14 @@ content = f"""<?xml version="1.0" encoding="UTF-8"?>
       <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
     <key>WorkingDirectory</key>
-    <string>{Path.home()}</string>
+    <string>$HOME</string>
     <key>StandardOutPath</key>
-    <string>{log_dir}/agent-notify.out.log</string>
+    <string>$LOG_DIR/agent-notify.out.log</string>
     <key>StandardErrorPath</key>
-    <string>{log_dir}/agent-notify.err.log</string>
+    <string>$LOG_DIR/agent-notify.err.log</string>
   </dict>
 </plist>
-"""
-plist_path.write_text(content)
-PY
+EOF
 }
 
 restart_launch_agent() {
@@ -251,7 +222,7 @@ EOF
 }
 
 require_macos
-require_python
+require_node
 ensure_terminal_notifier
 write_claude_hook
 backup_claude_settings

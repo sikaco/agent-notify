@@ -56,7 +56,7 @@ terminal-notifier -title "test" -message "hello"
 ## 运行要求
 
 - macOS
-- `python3`
+- `node`
 - Claude Code 和/或 Codex CLI
 
 可选：
@@ -73,7 +73,7 @@ brew install terminal-notifier
 ## 安装后会写入这些文件
 
 - `~/.claude/hooks/agent-notify.sh`
-- `~/.agent-notify/bin/agent-notify-watch.py`
+- `~/.agent-notify/bin/agent-notify-watch.mjs`
 - `~/Library/LaunchAgents/dev.agent-notify.codex-watcher.plist`
 
 ## 常见排查

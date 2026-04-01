@@ -45,7 +45,7 @@ bash uninstall.sh
 ## Requirements
 
 - macOS
-- `python3`
+- `node`
 - Claude Code and/or Codex CLI
 
 Optional:
@@ -74,7 +74,7 @@ Without this, the command line can call `terminal-notifier`, but no visible bann
 ## Files Installed
 
 - `~/.claude/hooks/agent-notify.sh`
-- `~/.agent-notify/bin/agent-notify-watch.py`
+- `~/.agent-notify/bin/agent-notify-watch.mjs`
 - `~/Library/LaunchAgents/dev.agent-notify.codex-watcher.plist`
 
 ## Troubleshooting

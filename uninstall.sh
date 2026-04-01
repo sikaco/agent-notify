@@ -21,54 +21,51 @@ remove_hook_config() {
     return
   fi
 
-  python3 <<'PY'
-import json
-from pathlib import Path
+  node <<'NODE'
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
-settings_path = Path.home() / ".claude" / "settings.json"
-hook_path = str(Path.home() / ".claude" / "hooks" / "agent-notify.sh")
+const settingsPath = path.join(os.homedir(), ".claude", "settings.json");
+const hookPath = path.join(os.homedir(), ".claude", "hooks", "agent-notify.sh");
 
-try:
-    config = json.loads(settings_path.read_text())
-except Exception:
-    raise SystemExit(0)
+let config;
+try {
+  config = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+} catch {
+  process.exit(0);
+}
 
-hooks = config.get("hooks")
-if not isinstance(hooks, dict):
-    raise SystemExit(0)
+if (!config.hooks || !Array.isArray(config.hooks.Stop)) {
+  process.exit(0);
+}
 
-stop_entries = hooks.get("Stop")
-if not isinstance(stop_entries, list):
-    raise SystemExit(0)
+const cleaned = config.hooks.Stop
+  .map((entry) => {
+    if (!Array.isArray(entry.hooks)) {
+      return entry;
+    }
 
-cleaned = []
-for entry in stop_entries:
-    nested = entry.get("hooks", [])
-    if not isinstance(nested, list):
-        cleaned.append(entry)
-        continue
+    const hooks = entry.hooks.filter(
+      (hook) => !(hook.type === "command" && hook.command === hookPath),
+    );
 
-    kept = [
-        hook
-        for hook in nested
-        if not (hook.get("type") == "command" and hook.get("command") == hook_path)
-    ]
+    return hooks.length === 0 ? null : { ...entry, hooks };
+  })
+  .filter(Boolean);
 
-    if kept:
-        next_entry = dict(entry)
-        next_entry["hooks"] = kept
-        cleaned.append(next_entry)
+if (cleaned.length > 0) {
+  config.hooks.Stop = cleaned;
+} else {
+  delete config.hooks.Stop;
+}
 
-if cleaned:
-    hooks["Stop"] = cleaned
-else:
-    hooks.pop("Stop", None)
+if (Object.keys(config.hooks).length === 0) {
+  delete config.hooks;
+}
 
-if not hooks:
-    config.pop("hooks", None)
-
-settings_path.write_text(json.dumps(config, indent=2, ensure_ascii=False) + "\n")
-PY
+fs.writeFileSync(settingsPath, `${JSON.stringify(config, null, 2)}\n`);
+NODE
 }
 
 stop_watcher() {
