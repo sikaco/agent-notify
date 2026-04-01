@@ -52,12 +52,24 @@ Optional:
 
 - `terminal-notifier` for grouped notifications and custom sounds
 
+## Important: macOS Notification Permission
+
+If `terminal-notifier` is installed, you still need to allow its notifications in macOS:
+
+1. Open `System Settings`
+2. Go to `Notifications`
+3. Find `terminal-notifier`
+4. Turn on `Allow Notifications`
+
+Without this, the command line can call `terminal-notifier`, but no visible banner may appear.
+
 ## Notes
 
 - Restart Claude Code and Codex CLI after installation.
 - The Codex watcher listens to `~/.codex-cli/sessions`.
 - Notification permissions may need to be enabled in System Settings.
 - If `terminal-notifier` is not installed, agent-notify falls back to built-in `osascript`.
+- The installer tries to install `terminal-notifier` automatically when Homebrew is available.
 
 ## Files Installed
 
@@ -74,6 +86,16 @@ tail -f ~/.agent-notify/logs/agent-notify.err.log
 launchctl print "gui/$(id -u)/dev.agent-notify.codex-watcher"
 ```
 
+Check `terminal-notifier`:
+
+```bash
+command -v terminal-notifier
+terminal-notifier -title "agent-notify" -subtitle "manual test" -message "If you see this, terminal-notifier works"
+```
+
+If the command succeeds but nothing appears, open `System Settings -> Notifications -> terminal-notifier`
+and allow notifications.
+
 Claude hook test:
 
 ```bash
@@ -83,3 +105,7 @@ Claude hook test:
 ## License
 
 MIT
+
+## 中文说明
+
+简体中文文档见 [README.zh-CN.md](README.zh-CN.md)。

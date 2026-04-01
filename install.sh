@@ -40,6 +40,29 @@ require_python() {
   fi
 }
 
+ensure_terminal_notifier() {
+  if command -v terminal-notifier >/dev/null 2>&1; then
+    return
+  fi
+
+  if command -v brew >/dev/null 2>&1; then
+    echo "terminal-notifier not found. Installing with Homebrew..."
+    brew install terminal-notifier
+    return
+  fi
+
+  cat <<'EOF'
+terminal-notifier is not installed.
+agent-notify will fall back to osascript notifications.
+
+If you want the recommended notification path, install terminal-notifier first:
+  brew install terminal-notifier
+
+Then open macOS System Settings -> Notifications -> terminal-notifier
+and allow notifications for terminal-notifier.
+EOF
+}
+
 download_or_copy() {
   local filename="$1"
   local destination="$2"
@@ -184,6 +207,11 @@ content = f"""<?xml version="1.0" encoding="UTF-8"?>
     <true/>
     <key>KeepAlive</key>
     <true/>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PATH</key>
+      <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
     <key>WorkingDirectory</key>
     <string>{Path.home()}</string>
     <key>StandardOutPath</key>
@@ -224,6 +252,7 @@ EOF
 
 require_macos
 require_python
+ensure_terminal_notifier
 write_claude_hook
 backup_claude_settings
 merge_claude_hook_config

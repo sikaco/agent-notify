@@ -18,6 +18,11 @@ STATE_PATH = HOME / ".agent-notify" / "state" / "watch-state.json"
 POLL_SECONDS = float(os.environ.get("AGENT_NOTIFY_POLL_SECONDS", "1.5"))
 MAX_MESSAGE_LEN = 140
 SOUND = os.environ.get("AGENT_NOTIFY_SOUND", "Glass")
+NOTIFIER_CANDIDATES = (
+    "terminal-notifier",
+    "/opt/homebrew/bin/terminal-notifier",
+    "/usr/local/bin/terminal-notifier",
+)
 
 
 def load_state() -> dict:
@@ -59,7 +64,7 @@ def project_name(cwd: str | None) -> str:
 
 
 def run_notification(title: str, subtitle: str, message: str, group: str) -> None:
-    notifier = shutil_which("terminal-notifier")
+    notifier = first_notifier()
     if notifier:
         subprocess.run(
             [
@@ -92,6 +97,14 @@ def run_notification(title: str, subtitle: str, message: str, group: str) -> Non
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+
+
+def first_notifier() -> str | None:
+    for candidate in NOTIFIER_CANDIDATES:
+        binary = shutil_which(candidate)
+        if binary:
+            return binary
+    return None
 
 
 def send_notification(path: Path, cwd: str | None, text: str) -> None:
@@ -205,7 +218,13 @@ def bootstrap_new_files(state: dict, files: list[Path]) -> bool:
 
 
 def shutil_which(name: str) -> str | None:
+    direct = Path(name)
+    if direct.is_absolute() and direct.exists() and os.access(direct, os.X_OK):
+        return str(direct)
+
     for part in os.environ.get("PATH", "").split(os.pathsep):
+        if not part:
+            continue
         candidate = Path(part) / name
         if candidate.exists() and os.access(candidate, os.X_OK):
             return str(candidate)
