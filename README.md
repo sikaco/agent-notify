@@ -1,25 +1,86 @@
 # agent-notify
 
-macOS-only notifications for Claude Code and Codex CLI.
+[简体中文](README.zh-CN.md)
 
-- Claude Code uses a native `Stop` hook.
-- Codex CLI uses a background watcher for local session JSONL files.
-- Codex App is not handled because it already has built-in notifications.
+Get a macOS notification when Claude Code or Codex CLI finishes, so you do not need to keep watching the terminal.
 
-## Install
+- Claude Code: native `Stop` hook
+- Codex CLI: background watcher for `~/.codex-cli/sessions`
+- Codex App: unchanged, it already has built-in notifications
 
-One-line install:
+## Quick Install
+
+Requirements:
+
+- macOS
+- `node`
+- Claude Code and/or Codex CLI
+
+Install:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sikaco/agent-notify/main/install.sh | bash
 ```
 
-Or clone the repo and run locally:
+After install:
+
+1. Restart Claude Code
+2. Restart Codex CLI
+3. If macOS asks for notification permission, allow it
+
+## Important: Enable Notification Permission
+
+If `terminal-notifier` is installed, you still need to enable its notification permission in macOS.
+
+Path:
+
+1. Open `System Settings`
+2. Open `Notifications`
+3. Find `terminal-notifier`
+4. Turn on `Allow Notifications`
+
+Without this, the command may succeed but no banner will appear.
+
+## What It Installs
+
+- `~/.claude/hooks/agent-notify.sh`
+- `~/.agent-notify/bin/agent-notify-watch.mjs`
+- `~/Library/LaunchAgents/dev.agent-notify.codex-watcher.plist`
+
+## How It Works
+
+- Claude Code uses a `Stop` hook
+- Codex CLI uses a LaunchAgent watcher
+- `terminal-notifier` is used when available
+- If `terminal-notifier` is missing, agent-notify falls back to `osascript`
+- If Homebrew is available, the installer tries to install `terminal-notifier` automatically
+
+## Quick Check
+
+Check the Codex watcher:
 
 ```bash
-git clone https://github.com/sikaco/agent-notify.git
-cd agent-notify
-bash install.sh
+launchctl print "gui/$(id -u)/dev.agent-notify.codex-watcher"
+tail -f ~/.agent-notify/logs/agent-notify.err.log
+```
+
+Test `terminal-notifier`:
+
+```bash
+command -v terminal-notifier
+terminal-notifier -title "agent-notify" -subtitle "manual test" -message "If you see this, terminal-notifier works"
+```
+
+If the command succeeds but nothing appears, go back to:
+
+`System Settings -> Notifications -> terminal-notifier`
+
+and enable notifications there.
+
+Test the Claude hook:
+
+```bash
+~/.claude/hooks/agent-notify.sh
 ```
 
 ## Uninstall
@@ -28,84 +89,6 @@ bash install.sh
 curl -fsSL https://raw.githubusercontent.com/sikaco/agent-notify/main/uninstall.sh | bash
 ```
 
-Or:
-
-```bash
-bash uninstall.sh
-```
-
-## What It Does
-
-- Sends a macOS notification when Claude Code finishes a response.
-- Sends a macOS notification when Codex CLI writes an `assistant final_answer`.
-- Shows the project name so multiple sessions are easier to distinguish.
-- Uses `terminal-notifier` when available.
-- Falls back to built-in `osascript` notifications, so Homebrew is optional.
-
-## Requirements
-
-- macOS
-- `node`
-- Claude Code and/or Codex CLI
-
-Optional:
-
-- `terminal-notifier` for grouped notifications and custom sounds
-
-## Important: macOS Notification Permission
-
-If `terminal-notifier` is installed, you still need to allow its notifications in macOS:
-
-1. Open `System Settings`
-2. Go to `Notifications`
-3. Find `terminal-notifier`
-4. Turn on `Allow Notifications`
-
-Without this, the command line can call `terminal-notifier`, but no visible banner may appear.
-
-## Notes
-
-- Restart Claude Code and Codex CLI after installation.
-- The Codex watcher listens to `~/.codex-cli/sessions`.
-- Notification permissions may need to be enabled in System Settings.
-- If `terminal-notifier` is not installed, agent-notify falls back to built-in `osascript`.
-- The installer tries to install `terminal-notifier` automatically when Homebrew is available.
-
-## Files Installed
-
-- `~/.claude/hooks/agent-notify.sh`
-- `~/.agent-notify/bin/agent-notify-watch.mjs`
-- `~/Library/LaunchAgents/dev.agent-notify.codex-watcher.plist`
-
-## Troubleshooting
-
-No notification:
-
-```bash
-tail -f ~/.agent-notify/logs/agent-notify.err.log
-launchctl print "gui/$(id -u)/dev.agent-notify.codex-watcher"
-```
-
-Check `terminal-notifier`:
-
-```bash
-command -v terminal-notifier
-terminal-notifier -title "agent-notify" -subtitle "manual test" -message "If you see this, terminal-notifier works"
-```
-
-If the command succeeds but nothing appears, open `System Settings -> Notifications -> terminal-notifier`
-and allow notifications.
-
-Claude hook test:
-
-```bash
-~/.claude/hooks/agent-notify.sh
-```
-
 ## License
 
 MIT
-
-## 中文说明
-
-简体中文文档见 [README.zh-CN.md](README.zh-CN.md)。
